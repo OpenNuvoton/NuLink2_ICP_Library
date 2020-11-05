@@ -1,6 +1,8 @@
 
 # ICPLib and Sample code to program NuMicro CortexM and 8051 series  
 
+![](NuLink2_ICPLib.PNG)
+
 there are two sample projects  
 - ICPLibDemo: NuMicro-M (use ICP.lib)	  
 - ICP51LibDemo: 8051 (use ICP51.lib)
