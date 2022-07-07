@@ -46,7 +46,8 @@ void SYS_Init(void)
     CLK_SetModuleClock(UART0_MODULE, CLK_CLKSEL1_UART0SEL_HXT, CLK_CLKDIV0_UART0(1));
 
     /* Set GPB multi-function pins for UART0 RXD and TXD */
-    SYS->GPB_MFPH = (SYS->GPB_MFPH & ~(SYS_GPB_MFPH_PB12MFP_Msk | SYS_GPB_MFPH_PB13MFP_Msk)) | (SYS_GPB_MFPH_PB12MFP_UART0_RXD | SYS_GPB_MFPH_PB13MFP_UART0_TXD);
+    //SYS->GPB_MFPH = (SYS->GPB_MFPH & ~(SYS_GPB_MFPH_PB12MFP_Msk | SYS_GPB_MFPH_PB13MFP_Msk)) | (SYS_GPB_MFPH_PB12MFP_UART0_RXD | SYS_GPB_MFPH_PB13MFP_UART0_TXD);
+    SYS->GPA_MFPL = (SYS->GPA_MFPL & ~(SYS_GPA_MFPL_PA0MFP_Msk | SYS_GPA_MFPL_PA1MFP_Msk)) | (SYS_GPA_MFPL_PA0MFP_UART0_RXD | SYS_GPA_MFPL_PA1MFP_UART0_TXD);
 }
 
 void UART0_Init()
@@ -72,14 +73,23 @@ int32_t main(void)
     /* Lock protected registers */
     SYS_LockReg();
 
+    /* Init Nu-Link2-Pro LED */
+    /* PF.4, PC.6, PB.8, PB.9 correspond to ICE, ISP, Green, Red respectively */
     GPIO_SetMode(PF, BIT4, GPIO_MODE_OUTPUT);
     GPIO_SetMode(PC, BIT6, GPIO_MODE_OUTPUT);
     GPIO_SetMode(PB, BIT8 | BIT9, GPIO_MODE_OUTPUT);
 
+    /* Control Nu-Link2-Pro Voltage Output */
+    GPIO_SetMode(PB, BIT3 | BIT4, GPIO_MODE_OUTPUT);
+
+    /* ICE LED is ON */
     PF4 = 0;
     PC6 = 1;
     PB8 = 1;
     PB9 = 1;
+
+    PB3 = 0;
+    PB4 = 1;
 
     /* Init UART0 for printf */
     UART0_Init();
@@ -92,39 +102,50 @@ int32_t main(void)
 
     while(PC7 != 0);
 
+    /* ISP LED is ON */
     PF4 = 1;
     PC6 = 0;
     PB8 = 1;
     PB9 = 1;
 
+    /* Init ICP and Select Reset Active Low mode */
     ICP_Init(ICP_RESET_ACTIVE_LOW);
 
+    /* Enter ICP mode */
     ICP_ModeEntry();
 
+    /* Set the Mass Erase, Page Erase and Program time of the flash memory of the target chip */
+    /* The initial Mass Erase, Page Erase and Program times are 120ms, 120ms and 28us respectively. */
     //ICP_SetMassEraseTime(320000, 120);
     //ICP_SetPageEraseTime(120000, 120);
     //ICP_SetProgramTime(28, 10);
 
+    /* Read Nuvoton Company ID */
     u32CID = ICP_ReadCID();
     printf("CID: 0x%08X\n", u32CID);
 
+    /* Read Part Device ID */
     u32PID = ICP_ReadPID();
     printf("PID: 0x%08X\n", u32PID);
 
+    /* Read Device ID */
     u32DID = ICP_ReadDID();
     printf("DID: 0x%08X\n", u32DID);
 
+    /* Read 96-bit Unique ID */
     u32UID[0] = ICP_ReadUID(0);
     u32UID[1] = ICP_ReadUID(1);
     u32UID[2] = ICP_ReadUID(2);
     printf("UID: 0x%08X-0x%08X-0x%08X\n", u32UID[0], u32UID[1], u32UID[2]);
 
+    /* Read 128-bit Unique Customer ID */
     u32UCID[0] = ICP_ReadUCID(0);
     u32UCID[1] = ICP_ReadUCID(1);
     u32UCID[2] = ICP_ReadUCID(2);
     u32UCID[3] = ICP_ReadUCID(3);
     printf("UCID: 0x%08X-0x%08X-0x%08X-0x%08X\n", u32UCID[0], u32UCID[1], u32UCID[2], u32UCID[3]);
 
+    /* Read CONFIG */
     ICP_ReadFlash(FMC_CONFIG_BASE + 0x00, 4, &u32Config_r[0]);
     ICP_ReadFlash(FMC_CONFIG_BASE + 0x04, 4, &u32Config_r[1]);
     printf("CONFIG0: 0x%08X, CONFIG1: 0x%08X\n", u32Config_r[0], u32Config_r[1]);
@@ -132,13 +153,16 @@ int32_t main(void)
     /* Mass Erase */
     ICP_MassErase();
 
-    ICP_ModeExit();     // Reload CONFIG
+    /* Exit ICP mode to Reload CONFIG */
+    ICP_ModeExit();
 
+    /* Re-enter ICP mode */
     ICP_ModeEntry();
 
     u32CID = ICP_ReadCID();
     printf("CID: 0x%08X\n", u32CID);
 
+    /* Check if the target chip is in lock mode */
     if (u32CID == 0xDA)
     {
         if (i32Err == 0)
@@ -199,10 +223,11 @@ int32_t main(void)
             ICP_ProgramFlash(FMC_CONFIG_BASE + 0x00, 4, &u32Config_w[0]);
             ICP_ProgramFlash(FMC_CONFIG_BASE + 0x04, 4, &u32Config_w[1]);
 #else
-            // NUC442/NUC472
+            // Only for NUC442/NUC472 series
             ICP_ProgramConfigWithCRC(u32Config_w[0], u32Config_w[1]);
 #endif
 
+            /* Verify CONFIG */
             ICP_ReadFlash(FMC_CONFIG_BASE + 0x00, 4, &u32Config_r[0]);
             ICP_ReadFlash(FMC_CONFIG_BASE + 0x04, 4, &u32Config_r[1]);
 
@@ -219,10 +244,13 @@ int32_t main(void)
         i32Err = 2;
     }
 
+    /* Exit ICP mode */
     ICP_ModeExit();
 
+    /* Uninit ICP */
     ICP_UnInit();
 
+    /* If passed, Green LED is ON; otherwise, Red LED is ON */
     if (i32Err == 0)
     {
         PF4 = 1;

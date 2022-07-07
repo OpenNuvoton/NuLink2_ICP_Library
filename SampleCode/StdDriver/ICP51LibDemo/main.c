@@ -82,12 +82,16 @@ int32_t main(void)
     /* Lock protected registers */
     SYS_LockReg();
 
+    /* Init Nu-Link2-Pro LED */
+    /* PF.4, PC.6, PB.8, PB.9 correspond to ICE, ISP, Green, Red respectively */
     GPIO_SetMode(PF, BIT4, GPIO_MODE_OUTPUT);
     GPIO_SetMode(PC, BIT6, GPIO_MODE_OUTPUT);
     GPIO_SetMode(PB, BIT8 | BIT9, GPIO_MODE_OUTPUT);
 
+    /* Control Nu-Link2-Pro Voltage Output */
     GPIO_SetMode(PB, BIT3 | BIT4, GPIO_MODE_OUTPUT);
 
+    /* ICE LED is ON */
     PF4 = 0;
     PC6 = 1;
     PB8 = 1;
@@ -107,24 +111,31 @@ int32_t main(void)
 
     while(PC7 != 0);
 
+    /* ISP LED is ON */
     PF4 = 1;
     PC6 = 0;
     PB8 = 1;
     PB9 = 1;
 
+    /* Init ICP */
     ICP51_Init();
 
+    /* Enter ICP mode */
     ICP51_ModeEntry();
 
+    /* Read Nuvoton Company ID */
     u8CID = ICP51_ReadCID();
     printf("CID: 0x%02X\n", u8CID);
 
+    /* Read Part Device ID */
     u16PID = ICP51_ReadPID();
     printf("PID: 0x%04X\n", u16PID);
 
+    /* Read Device ID */
     u16DID = ICP51_ReadDID();
     printf("DID: 0x%04X\n", u16DID);
 
+    /* Read 96-bit Unique ID */
     for (i = 0; i < 12; i++)
     {
         u8UID[i] = ICP51_ReadUID(i);
@@ -134,6 +145,7 @@ int32_t main(void)
     printf("UID 4-7: 0x%02X-0x%02X-0x%02X-0x%02X\n", u8UID[4], u8UID[5], u8UID[6], u8UID[7]);
     printf("UID 8-11: 0x%02X-0x%02X-0x%02X-0x%02X\n", u8UID[8], u8UID[9], u8UID[10], u8UID[11]);
 
+    /* Read 128-bit Unique Customer ID */
     for (i = 0; i < 16; i++)
     {
         u8UCID[i] = ICP51_ReadUCID(i);
@@ -144,15 +156,18 @@ int32_t main(void)
     printf("UCID 8-11: 0x%02X-0x%02X-0x%02X-0x%02X\n", u8UCID[8], u8UCID[9], u8UCID[10], u8UCID[11]);
     printf("UCID 12-15: 0x%02X-0x%02X-0x%02X-0x%02X\n", u8UCID[12], u8UCID[13], u8UCID[14], u8UCID[15]);
 
+    /* Read CONFIG */
     ICP51_ReadCFG(u8Config_r);
     printf("CONFIG: 0x%02X-0x%02X-0x%02X-0x%02X-0x%02X\n", u8Config_r[0], u8Config_r[1], u8Config_r[2], u8Config_r[3], u8Config_r[4]);
 
     /* Mass Erase */
     ICP51_MassErase();
 
+    /* Check if the target chip is in lock mode */
     if (u8CID == 0xFF)
     {
-        ICP51_ModeReEntry();    // Flash Reload
+        /* Re-enter ICP mode to Reload Flash */
+        ICP51_ModeReEntry();
 
         u8CID = ICP51_ReadCID();
         printf("CID: 0x%02X\n", u8CID);
@@ -219,11 +234,14 @@ int32_t main(void)
                 /* Erase SPROM */
                 ICP51_EraseSPROM();
 
+                /* Check if SPROM is in lock mode */
                 if (u8Data != 0xFF)
                 {
-                    ICP51_ModeReEntry();    // Flash Reload
+                    /* Re-enter ICP mode to Reload Flash */
+                    ICP51_ModeReEntry();
                 }
 
+                /* Program and Verify SPROM */
                 u32Result = ICP51_ProgramSPROM(0, u32ImageSize, (uint8_t *)&SPROMImageBase, TRUE);
 
                 if (u32Result != (0 + u32ImageSize))
@@ -254,6 +272,7 @@ int32_t main(void)
 
             ICP51_ProgramCFG(u8Config_w);
 
+            /* Verify CONFIG */
             ICP51_ReadCFG(u8Config_r);
 
             for (i = 0; i < 5; i++)
@@ -273,10 +292,13 @@ int32_t main(void)
         i32Err = 2;
     }
 
+    /* Exit ICP mode */
     ICP51_ModeExit();
 
+    /* Uninit ICP */
     ICP51_UnInit();
 
+    /* If passed, Green LED is ON; otherwise, Red LED is ON */
     if (i32Err == 0)
     {
         PF4 = 1;
